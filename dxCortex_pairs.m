@@ -160,6 +160,65 @@ classdef dxCortex_pairs < handle
             phi_all = phi_all/obj.NB;
             
         end
+        
+        function [SVs,phi_all,phi_0] = SVs_LS(obj,data)
+ 
+            NS = size(data,1);
+            SVs = zeros(obj.NF,NS);
+            phi_all = zeros(1,NS);
+            phi_0 = zeros(1,NS);
+            for ib=1:obj.NB
+                [tmp,p_all,p_0] = obj.masters{ib}.SVs_reverse_LS(data, emptySetBehavior.LS);
+                SVs = SVs + tmp;
+                phi_all = phi_all + p_all';
+                phi_0 = phi_0 + p_0';
+            end
+            
+            SVs = SVs/obj.NB;
+            phi_0 = phi_0/obj.NB;
+            phi_all = phi_all/obj.NB;
+            
+        end
+        
+        function [SVs,phi_all,phi_0] = SVs_NO(obj,data)
+ 
+            NS = size(data,1);
+            SVs = zeros(obj.NF,NS);
+            phi_all = zeros(1,NS);
+            phi_0 = zeros(1,NS);
+            for ib=1:obj.NB
+                [tmp,p_all,p_0] = obj.masters{ib}.SVs_reverse_LS(data, emptySetBehavior.NO);
+                SVs = SVs + tmp;
+                phi_all = phi_all + p_all';
+                phi_0 = phi_0 + p_0';
+            end
+            
+            SVs = SVs/obj.NB;
+            phi_0 = phi_0/obj.NB;
+            phi_all = phi_all/obj.NB;
+            
+        end
+        
+        function [SVs,phi_all,phi_0] = SVs_NL(obj,data)
+ 
+            NS = size(data,1);
+            SVs = zeros(obj.NF,NS);
+            phi_all = zeros(1,NS);
+            phi_0 = zeros(1,NS);
+            for ib=1:obj.NB
+                [tmp,p_all,p_0] = obj.masters{ib}.SVs_reverse_LS(data, emptySetBehavior.NL);
+                SVs = SVs + tmp;
+                phi_all = phi_all + p_all';
+                phi_0 = phi_0 + p_0';
+            end
+            
+            SVs = SVs/obj.NB;
+            phi_0 = phi_0/obj.NB;
+            phi_all = phi_all/obj.NB;
+            
+        end
+        
     end
+    
 end
 

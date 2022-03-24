@@ -6,6 +6,9 @@ classdef emptySetBehavior
         doi
         mc_shallow
         mc_deep
+        LS
+        NL
+        NO
     end
     
     methods
@@ -18,6 +21,12 @@ classdef emptySetBehavior
                 name = 'mc_shallow';
             elseif (obj == emptySetBehavior.mc_deep)
                 name = 'mc_deep';    
+            elseif (obj == emptySetBehavior.LS)
+                name = 'LS';   
+            elseif (obj == emptySetBehavior.NL)
+                name = 'NL';
+            elseif (obj == emptySetBehavior.NO)
+                name = 'NO';
             end
         end
         
