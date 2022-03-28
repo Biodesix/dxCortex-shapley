@@ -10,6 +10,7 @@ function SH_val = SH(t_i,tau_i,v_tildes)
 % Output:
 %       SH_val: the SV for feature t_i
 %NOTE: the empty coalition has value 0!!!!!!!!!!!!!!!!!!!
+% DARN!!! this is now fixed
     
     tmp = v_tildes.values;
     NS = length(tmp{1});
@@ -47,7 +48,7 @@ function SH_val = SH(t_i,tau_i,v_tildes)
     
     % add the empty set term 
     factor = 1/(N_S+1);
-    v_0 = 0;   %empty set coalition has value zero
+    v_0 = 0;   %empty set coalition has value zero  
     SH_val = SH_val + factor*(v_tildes(myfastint2str(t_i)) - v_0);
     
 end
