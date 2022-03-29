@@ -9,6 +9,7 @@ classdef emptySetBehavior
         LS
         NL
         NO
+        HNL
     end
     
     methods
@@ -27,6 +28,8 @@ classdef emptySetBehavior
                 name = 'NL';
             elseif (obj == emptySetBehavior.NO)
                 name = 'NO';
+            elseif (obj == emptySetBehavior.HNL)
+                name = 'HNL';
             end
         end
         
