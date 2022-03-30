@@ -804,6 +804,8 @@ classdef masterclassifier < handle
             elseif (behavior == emptySetBehavior.NO)
                 %[SVs_dict,phi_all] = NO_SVS(level_structure,mc_labels_dict,coeffs,ftrs_used_in_kNN, N_ftrs_used_in_kNN, verbose);
                 [SVs_dict,phi_all] = obj.NO_SVS_local(doi,level_structure,coeffs, mc_labels, verbose);
+            elseif (behavior == emptySetBehavior.HNO)
+                [SVs_dict,phi_all] = obj.HNO_SVS_local(doi,level_structure,coeffs, mc_labels, verbose);    
             elseif(behavior == emptySetBehavior.LS)
                 disp([ 'WARNING: this is slow!!!!!!!'])
                 [SVs_dict,phi_all] = LS_SVS(level_structure,mc_labels_dict,coeffs,ftrs_used_in_kNN, N_ftrs_used_in_kNN, verbose);               
@@ -1610,7 +1612,224 @@ classdef masterclassifier < handle
 
         end
         
+        function [NO_SVs,phi_all] = HNO_SVS_local(obj,doi,level_structure, coeffs, mc_labels,verbose)
+            %HNO_SVS: Calculates nested Owen SVs for a doi using
+%   M. Besner, Discrete applied mathematics, 309 (2022)85--109 , using
+%   algorithm 5.4 modified for dois and corrections to the paper; this uses
+%   the linear part of the logreg for middlelayer to lower layer
+%   calculations
+%           in line 12 S is a proper subset of B^k(i)
+%           insert overbar(v)^0_i({i}) = SH_{i}(B^0|_B^1(i),tilde(v)^0_i)
+%   Input:
+%       doi:                index into dois
+%       level_structure:    A level structure (see class)
+%       mc_labels:          array(#samples,#mcs) giving the values of a
+%                           kNN either -1 or +1; 
+%       coeffs:             the logreg expansion coefficients rescaled to
+%                           work with values in(-1,+1) rather than (0,1)
+%       verbose:            if 1 displays middlelayer SVs
+%   Output:
+%       NO_SVs:             the nested level Shapley values as elements of
+%                           a containers.Map with keys being the features
+%                           as strings
+%       phi_all:            the value of the grand coalition of all
+%                           features in the doi
+%   Note: This is using SH.m which calculates the SVs of game using the
+%   direct formula. It might be faster to use the least squares formulation
+%   when calculating the SVs for the components of th e middlelayer
 
+%   v1.0        HR                  3/30/2022
+
+
+            % following NL SVs we calculate the SV of the middle layer components
+
+            % how many components
+            N_comp = length(level_structure.middlelayer);
+
+            % form a list of all coalitions the middlelayer can form 
+            elementlist = 1:1:N_comp;
+            middlelayer_coalitions = cell(1,2^N_comp-1);
+            cnt = 0;
+            for k = 1:N_comp
+                tmp = nchoosek(elementlist,k);
+                for j = 1:size(tmp,1)
+                    cnt = cnt + 1;
+                    middlelayer_coalitions{cnt} = tmp(j,:);
+                end
+            end
+
+            %----------- for SH_LS
+            if (N_comp > 1 )
+                ftrs_per_player = cell(N_comp,1);
+                for i = 1:N_comp
+                    ftrs_per_player{i} = cell2mat(level_structure.middlelayer{i}.features);
+                end
+                [middlelayer_SVs, phi_all, phi_0] = SH_LS(obj,doi,ftrs_per_player,mc_labels,coeffs,0);
+            elseif (N_comp == 1)
+                ftrs_in_coalition = cell2mat(level_structure.middlelayer{1}.features);
+                middlelayer_SVs = doi_prediction_from_subset(obj,doi,ftrs_in_coalition,mc_labels,coeffs) - doi_prediction_from_subset(obj,doi,[],mc_labels,coeffs);
+            else
+                error([' N__SVs_local:: this should never happen N_comp = ' num2str(N_comp)])
+            end
+            
+            if (verbose )
+                disp([' middlelayer SVs: ' num2str(middlelayer_SVs)])
+            end
+
+            % now we loop over every component to generate the SVs for features in this
+            % component i.e. we go through the loops line 12 through 22 
+            component_ftr_sets = level_structure.set_of_middlelayer_sets();
+
+            NO_SVs = containers.Map;
+            for ic = 1:N_comp
+                %comp_SV = middlelayer_SVs(:,ic); % the value of a component from the previous calculation
+                % calculate the coalitions S that the children of this component can form
+                % apart from the grand coalition 
+                N_elements = length(component_ftr_sets{ic});
+                elementlist = 1:1:N_elements;
+                S = cell(1,2^N_elements-2);  % do not include this one's grand coalition hence -2 instead of -1
+                S_ftrs = cell(1,2^N_elements-2);
+                singletons = component_ftr_sets{ic};
+                cnt = 0;
+                for k = 1:N_elements-1
+                    tmp = nchoosek(elementlist,k);
+                    for j = 1:size(tmp,1)
+                        cnt = cnt + 1;
+                        S{cnt} = tmp(j,:);  
+                        S_ftrs{cnt} = singletons(tmp(j,:));
+                    end
+                end
+
+                % loop over these s_i in
+                bar_v_11 = containers.Map;
+                for i = 1:length(S)          % these will be coalitions of singletons (in the bottomlayer)
+                    % replace the middlelayer component that contains ftr_i by s_i
+                    S_bki = component_ftr_sets;
+                    S_bki{ic} = S_ftrs{i}; % they are singletons after all
+                    key = S{i};
+                    %----------- for SH_LS
+                    if (length(S_bki) > 1 )
+                        ftrs_per_player = S_bki;
+                        [ttt, phi_all, phi_0] = SH_LS_linear(obj,doi,ftrs_per_player,mc_labels,coeffs,0);
+                        bar_v_11(myfastint2str(key)) = ttt(:,ic);      % need the ic'th SV
+                    elseif (length(S_bki) == 1)
+                        ftrs_in_coalition = S_bki{1};
+                        bar_v_11(myfastint2str(key)) = doi_prediction_from_subset_linear(obj,doi,ftrs_in_coalition,mc_labels,coeffs) - doi_prediction_from_subset_linear(obj,doi,[],mc_labels,coeffs);
+                    else
+                        error([' N__SVs_local:: this should never happen N_comp = ' num2str(N_comp)])
+                    end
+                end
+                % assign the grand coalition for the features
+                N_elements = length(component_ftr_sets{ic});
+                %bar_v_11(myfastint2str(1:1:N_elements)) = comp_SV;  for H
+                %we need the grand coalition here
+                bar_v_11(myfastint2str(1:1:N_elements)) = doi_prediction_from_subset_linear(obj,doi,component_ftr_sets{ic},mc_labels,coeffs);
+                tau_i = num2cell(1:1:N_elements);
+                %calculate the SH values for all features in the component
+                ftrs = component_ftr_sets{ic};
+                [ttt_1, pall,p0] = SH_LS_from_dictionary_linear(obj,doi,tau_i,mc_labels,coeffs,bar_v_11,0);
+
+                tmp = middlelayer_SVs(:,ic) ./ (pall(:) - p0(:));
+                for i = 1:length(tau_i)
+                    key = myfastint2str(ftrs(i));
+                    NO_SVs(key) = ttt_1(:,i) .* tmp(:);
+                end
+                
+            end
+
+            % NOTE: populate phi_all; this seems to be correct
+            phi_all = doi_prediction_from_subset(obj,doi,cell2mat(level_structure.bottomlayer),mc_labels,coeffs);
+    
+        end
+        
+        function [SVs, phi_all, phi_0] = SH_LS_linear(obj,doi,ftrs_per_player,mc_labels,coeffs,debug)
+            % LS formalism SVs for a set of players with ftrs_per_player as
+            % players; the values of the coalitions are calculated from the
+            % linear part
+        %   Input:
+        %       doi:                not used; too lazy to change
+        %       ftrs_per_player:    the players (array) in a cell array
+        %       mc_labels:          array(#samples,#mcs) giving the values of a
+        %                           kNN either -1 or +1; 
+        %       coeffs:             the logreg expansion coefficients rescaled to
+        %                           work with values in(-1,+1) rather than (0,1)
+        %       debug:              if 1 enables a break point @ the end
+        %   Output:
+        %       SVs:                the Shapley values as array (NS,NF) the
+        %                           features are counted as in ftrs_per_player
+        %       phi_all:            the value of the grand coalition (NS,1)
+        %       phi_0:              the value of the empty set (NS,1)
+        %
+        %   v1.0        HR                  3/30/2022
+            % need the position of each ftr in the doi in the full configuration
+            
+            NF = length(ftrs_per_player);
+            ftr_pos = 1:1:NF;    % this could be done ahead ot
+            NS = size(mc_labels,1);
+            % initialize RR matrix and S vector
+            RR = zeros(NF+1,NF+1);
+            S = zeros(NF+1,NS);
+
+            % make an array of ftr indices
+            ftrs = 1:1:NF;
+
+            % making a local phi_0
+            phi_0 = zeros(NS,1);
+            phi_0(:) = coeffs(1) ;
+
+            % making a local phi_all
+            % list of dois
+            gc = [ftrs_per_player{:}];
+            phi_all = doi_prediction_from_subset_linear(obj,doi,gc,mc_labels,coeffs);
+
+            for s = 0:1:NF 
+                if (s == 0)
+                    tmpRR = zeros(NF+1,NF+1);
+                    tmpRR(1,1) = 1;
+                    RR = RR + tmpRR;
+                    for i = 1:NS
+                        S(:,i) = S(:,i) + phi_0(i) * ones(NF+1,1);
+                    end
+                elseif (s == NF)
+                    tmpRR = ones(NF+1,NF+1);
+                    RR = RR + tmpRR;
+                    for i=1:NS
+                        S(:,i) = S(:,i) + phi_all(i) * ones(NF+1,1);
+                    end
+                else 
+                    factor = 1./(nchoosek(NF,s)*s*(NF-s));
+                    sizeOfS = nchoosek(NF,s);
+                    use = true(NF,1);
+                    allSets = nchoosek(ftrs(use),s);
+                    for i = 1:sizeOfS 
+                        % get a configuration                     
+                        currSequence = zeros(NF,1);
+                        currSequence(allSets(i,:)) = 1;
+                        % make z vector
+                        z = [1 currSequence'];
+                        % update matrix
+                        RR = RR + (z'*z) * factor;
+                        % get a classification
+                        global_ftrs = ftr_pos(allSets(i,:));
+                        ftrs_in_coalition = [ftrs_per_player{global_ftrs}];
+                        u = doi_prediction_from_subset_linear(obj,doi,ftrs_in_coalition,mc_labels,coeffs);
+                        for jj = 1:NS
+                            S(:,jj) = S(:,jj) + z' * factor * u(jj);
+                        end
+                    end
+                end
+            end
+
+            SVs_local = obj.generate_LL_SVs_multiple_samples_spec0_all(RR,S,phi_all,NF,phi_0);
+            
+            SVs = SVs_local';
+            
+            if (debug )
+                pp = 18;
+            end
+
+        end
+        
     end
 end
 
