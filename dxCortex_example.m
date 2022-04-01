@@ -29,6 +29,7 @@ corr_mat = [];
 if (length(mu_corr) > 1)
     corr_mat = vineBeta(length(mu_corr),lambda);
 end
+%% 
 
 % generate training and validation sample
 [r1,r2,rs] = GenReal_for_SV(grp_size, grp_size, NF, mu_uncorr, mu_corr, corr_mat, corr_mat, rs);
@@ -67,18 +68,18 @@ test_accuracy = 1 - sum ( (labels > 0.5) ~= testLabels' )  /size(T,1);
 display([ 'test-accuracy = ' num2str(test_accuracy) ])
 
 % get all four types of Shapley values from the paper
-tic;
-[SVs_restricted,~,~] = fullCortex.SVs_restricted(T);
-restricted_time = toc
-
-tic;
-[SVs_shallow,~,~] = fullCortex.SVs_shallow(T);
-shallow_time = toc
-
-tic;
-[SVs_deep,~,~] = fullCortex.SVs_deep(T);
-deep_time = toc
-
+% tic;
+% [SVs_restricted,~,~] = fullCortex.SVs_restricted(T);
+% restricted_time = toc
+% 
+% tic;
+% [SVs_shallow,~,~] = fullCortex.SVs_shallow(T);
+% shallow_time = toc
+% 
+% tic;
+% [SVs_deep,~,~] = fullCortex.SVs_deep(T);
+% deep_time = toc
+% 
 tic;
 [SVs_hierarchical,~,~] = fullCortex.SVs_hierarchical(T);
 hier_time = toc
