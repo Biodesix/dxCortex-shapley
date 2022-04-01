@@ -1039,7 +1039,7 @@ classdef masterclassifier < handle
             % are in the first NF second indices of mc_labels, and are
             % numbered from 1:NF
         %   Input:
-        %       doi:                not used; too lazy to change
+        %       doi:                used in ftrs_usedby_doi_and_mc
         %       subset:             the subset of ftrnames
         %       mc_labels:          array(#samples,#mcs) giving the values of a
         %                           kNN either -1 or +1; 
