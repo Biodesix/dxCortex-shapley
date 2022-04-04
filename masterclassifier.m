@@ -800,6 +800,7 @@ classdef masterclassifier < handle
                 %[SVs_dict,phi_all] = NL_SVS(level_structure,mc_labels_dict,coeffs,ftrs_used_in_kNN, N_ftrs_used_in_kNN, verbose);
                 [SVs_dict,phi_all,p0] = obj.NL_SVS_local(doi,level_structure,coeffs, mc_labels, verbose);
             elseif (behavior == emptySetBehavior.HNL)
+                %[SVs_dict,phi_all,p0] = obj.HNL_SVS_local_2(doi,level_structure,coeffs, mc_labels, verbose);
                 [SVs_dict,phi_all,p0] = obj.HNL_SVS_local(doi,level_structure,coeffs, mc_labels, verbose);
             elseif (behavior == emptySetBehavior.NO)
                 %[SVs_dict,phi_all] = NO_SVS(level_structure,mc_labels_dict,coeffs,ftrs_used_in_kNN, N_ftrs_used_in_kNN, verbose);
@@ -858,12 +859,17 @@ classdef masterclassifier < handle
 %                                              N_ftrs_used_in_kNN as
 %                                              argument
 %   v1.4        HR                  3/28/2022 major fixes, use LS, etc
+%   v1.5        HR                  4/2/2022 fixed normalization on middlelayer SVs    
+
 
 
             % following NL SVs we calculate the SV of the middle layer components
 
             % how many components
             N_comp = length(level_structure.middlelayer);
+            NS      = size(mc_labels,1);
+            P   = @(x) 2/(1+exp(-x)) - 1 ;
+            v0  = P(coeffs(1));
 
             % form a list of all coalitions the middlelayer can form 
             elementlist = 1:1:N_comp;
@@ -940,7 +946,7 @@ classdef masterclassifier < handle
                 end
                 % assign the grand coalition for the features
                 N_elements = length(component_ftr_sets{ic});
-                bar_v_11(myfastint2str(1:1:N_elements)) = comp_SV;
+                bar_v_11(myfastint2str(1:1:N_elements)) = comp_SV + v0*ones(NS,1);
                 tau_i = num2cell(1:1:N_elements);
                 %calculate the SH values for all features in the component
                 ftrs = component_ftr_sets{ic};
@@ -1290,6 +1296,7 @@ classdef masterclassifier < handle
         %                                   coalition value calculations
         %                                   --- use least squares for all
         %                                   internal SV calculations
+        %   v1.5        HR                  4/2/2022 fixed normalization on middlelayer SVs    
         %
 
             NL_SVs  = containers.Map;
@@ -1339,7 +1346,7 @@ classdef masterclassifier < handle
                     number2features(myfastint2str(i)) = ftrs_in_component{i};      
                 end        
                 c_vals = containers.Map;    %make the coalition values             
-                c_vals(myfastint2str(1:1:length(ftrs_in_component))) = middlelayer_SVs(:,ic);     % take the grand coalition from above
+                c_vals(myfastint2str(1:1:length(ftrs_in_component))) = middlelayer_SVs(:,ic) + v0*ones(NS,1);     % take the grand coalition from above
                 elementlist = 1:1:length(ftrs_in_component);   
                 for k = 1:length(ftrs_in_component) - 1     % not the grand coalition
                     tmp = nchoosek(elementlist,k);
@@ -1729,7 +1736,7 @@ classdef masterclassifier < handle
                 ftrs = component_ftr_sets{ic};
                 [ttt_1, pall,p0] = SH_LS_from_dictionary_linear(obj,doi,tau_i,mc_labels,coeffs,bar_v_11,0);
 
-                tmp = middlelayer_SVs(:,ic) ./ (pall(:) - p0(:));
+                tmp = middlelayer_SVs(:,ic) ./ (pall(:) - p0(:)); % if denominator = 0 then NO_SVs = 0 !
                 for i = 1:length(tau_i)
                     key = myfastint2str(ftrs(i));
                     NO_SVs(key) = ttt_1(:,i) .* tmp(:);
@@ -1830,6 +1837,117 @@ classdef masterclassifier < handle
 
         end
         
+% function [NL_SVs,phi_all,phi_0] = HNL_SVS_local_2(obj,doi,level_structure,coeffs, mc_labels, verbose)
+%             %NLH_SVS: Calculates nested level SVs for a doi using
+%         %   M. Besner, Discrete applied mathematics, 309 (2022)85--109 , using
+%         %   algorithm 5.3 modified for dois and simplified to get all ftrs' SV
+%         %   using the linear combination of components on the h- 0 level
+%         %   Input:
+%         %       level_structure:    A level structure (see class)
+%         %       mc_labels:          array(#samples,#mcs) giving the values of a
+%         %                           kNN either -1 or +1; 
+%         %       coeffs:             the logreg expansion coefficients rescaled to
+%         %                           work with values in(-1,+1) rather than (0,1)
+%         %       verbose:            if 1 displays the SVs of the middle layer
+%         %   Output:
+%         %       NL_SVs:             the nested level Shapley values as elements of
+%         %                           a containers.Map with keys being the features
+%         %                           as strings
+%         %       phi_all:            the value of the grand coalition of all
+%         %                           features in the doi
+%         %       phi_0:              the value of the empty set (NS,1)
+%         %
+%         %   v1.0        HR                  3/29/2022
+%         %
+% 
+%             NL_SVs  = containers.Map;
+%             NS      = size(mc_labels,1);
+%             
+%             P   = @(x) 2/(1+exp(-x)) - 1 ;
+%             v0  = P(coeffs(1));
+% 
+%             N_comp = length(level_structure.middlelayer);   % how many components
+% 
+%             % form a list of all coalitions the middlelayer can form 
+%             elementlist = 1:1:N_comp;
+%             middlelayer_coalitions = cell(1,2^N_comp-1);
+%             cnt = 0;
+%             for k = 1:N_comp
+%                 tmp = nchoosek(elementlist,k);
+%                 for j = 1:size(tmp,1)
+%                     cnt = cnt + 1;
+%                     middlelayer_coalitions{cnt} = tmp(j,:);
+%                 end
+%             end
+% 
+%             % middlelayer SVs
+%             if (N_comp > 1 )
+%                 ftrs_per_player = cell(N_comp,1);
+%                 for i = 1:N_comp
+%                     ftrs_per_player{i} = cell2mat(level_structure.middlelayer{i}.features);
+%                 end
+%                 [middlelayer_SVs, ~, ~] = SH_LS(obj,doi,ftrs_per_player,mc_labels,coeffs,0);
+%             elseif (N_comp == 1)
+%                 ftrs_in_coalition = cell2mat(level_structure.middlelayer{1}.features);
+%                 middlelayer_SVs = doi_prediction_from_subset(obj,doi,ftrs_in_coalition,mc_labels,coeffs) - doi_prediction_from_subset(obj,doi,[],mc_labels,coeffs);
+%             else
+%                 error([' N__SVs_local:: this should never happen N_comp = ' num2str(N_comp)])
+%             end
+%             if (verbose )
+%                 disp([' middlelayer SVs: ' num2str(middlelayer_SVs)])
+%             end
+% 
+%             % bottomlayer for final SVs          
+%             for ic = 1:N_comp % loop over components            
+%                 ftrs_in_component = level_structure.middlelayer{ic}.features;       % get the features in this component
+%                 % make a dictionary from numbers to features so we can map back to
+%                 % original feature names
+%                 number2features = containers.Map;
+%                 for i = 1:length(ftrs_in_component)
+%                     number2features(myfastint2str(i)) = ftrs_in_component{i};      
+%                 end        
+%                 c_vals = containers.Map;    %make the coalition values             
+%                 c_vals(myfastint2str(1:1:length(ftrs_in_component))) = middlelayer_SVs(:,ic) +v0*ones(NS,1);     % take the grand coalition from above
+%                 %c_vals(myfastint2str(1:1:length(ftrs_in_component))) = doi_prediction_from_subset_linear(obj,doi,cell2mat(ftrs_in_component),mc_labels,coeffs);
+%                 elementlist = 1:1:length(ftrs_in_component);   
+%                 for k = 1:length(ftrs_in_component) - 1     % not the grand coalition
+%                     tmp = nchoosek(elementlist,k);
+%                     for j = 1:size(tmp,1)
+%                         coalition = sort(tmp(j,:));   %values from 1:length(ftrs_in_component)
+%                         ftrs_used_in_coalition = zeros(1,length(coalition));
+%                         for i = 1:length(coalition)
+%                             ftrs_used_in_coalition(i) = number2features(myfastint2str(coalition(i)));   % looks like array access but in fact it is dictionary access
+%                         end
+%                         c_vals(myfastint2str((coalition))) = doi_prediction_from_subset_linear(obj,doi,ftrs_used_in_coalition,mc_labels,coeffs);
+%                     end
+%                 end
+% 
+%                 % calculate the SVs (map back to original feature names )
+% %                 tau_i = num2cell(1:1:length(ftrs_in_component));
+% %                 [ttt_1, phi_all, phi_0] = SH_LS_from_dictionary_linear(obj,doi,tau_i,mc_labels,coeffs,c_vals,0);
+%                 
+% %                 tmp = middlelayer_SVs(:,ic) ./ (phi_all(:) - phi_0(:));
+% %                 for i = 1:length(tau_i)
+% %                     NL_SVs(myfastint2str(number2features(myfastint2str(tau_i{i})))) = ttt_1(:,i) .* tmp(:);
+% %                 end
+%              
+%                 % calculate the SVs (map back to original feature names )
+%                 tau_i = num2cell(1:1:length(ftrs_in_component));
+%                 [ttt_1, ~, ~] = SH_LS_from_dictionary(obj,doi,tau_i,mc_labels,coeffs,c_vals,0);
+%                 for i = 1:length(tau_i)
+%                     NL_SVs(myfastint2str(number2features(myfastint2str(tau_i{i})))) = ttt_1(:,i);
+%                 end
+% 
+%             end
+%             
+%             
+% 
+%             %phi_0,phi_all
+%             phi_0 = v0*ones(NS,1); 
+%             phi_all = doi_prediction_from_subset(obj,doi,cell2mat(level_structure.bottomlayer),mc_labels,coeffs);
+% 
+%         end
+
     end
 end
 
