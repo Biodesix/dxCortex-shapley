@@ -3,10 +3,11 @@ classdef k1node < handle
 %   A class containing the features and the mini-classifiers of an
 %   element on the first level of the k=1 level structure
 %   v1.0        HR                  3/14/2022
+%   v1.1        HR                  4/11/2022 cleanup
     
     properties
         features            % cell array of doubles
-        mcs                 % array of mini classifier indices, maybe unnecessary
+        %mcs                 % array of mini classifier indices, maybe unnecessary
     end
     
     methods
@@ -24,7 +25,7 @@ classdef k1node < handle
                 mc_used             = varargin{1};
                 ftrs_used_in_kNN    = varargin{2};
                 N_ftrs_used_in_kNN  = varargin{3};
-                obj.mcs             = mc_used;
+                %obj.mcs             = mc_used;
                 % for the features use ismember and loop probably faster
                 % than union
                 ftrs        = zeros(1,2*length(mc_used));
@@ -39,9 +40,9 @@ classdef k1node < handle
                     end
                 end               
                 obj.features = num2cell(ftrs(1:cnt));   %convert to cell array
-            elseif (length(varargin) == 2)
-                obj.mcs         = varargin{1};
-                obj.features    = varargin{2};
+            elseif (length(varargin) == 1)
+                %obj.mcs         = varargin{1};
+                obj.features    = varargin{1};
             else
                 error([' wrong number of arguments to k1node constructor ' num2str(length(varargin))])
             end
@@ -52,8 +53,8 @@ classdef k1node < handle
             %add
             %   Add a k1node to an existing node returns a k1node
             ftrs        = num2cell( union( cell2mat(obj.features),cell2mat(node.features)));
-            mc          = union( obj.mcs,node.mcs);
-            dd = k1node(mc,ftrs);
+            %mc          = union( obj.mcs,node.mcs);
+            dd = k1node(ftrs);
             
         end
     end

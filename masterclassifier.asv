@@ -344,14 +344,14 @@ classdef masterclassifier < handle
                 % there is a request from a coalition for a singleton that
                 % is not in the list of all mini-classifiers it is given
                 % the value 0.
-                mc_labels_dict = containers.Map;
+                %mc_labels_dict = containers.Map;
                 mc_labels_2 = zeros(size(samples,1),obj.Nmcs);
                 % loop over all mini-classifiers
                 for imc = 1:obj.Nmcs
-                    ftrs_used = obj.mc_ftrs(imc,1:obj.mc_ftr_number(imc));
-                    key = myfastint2str(sort(ftrs_used));
+                    %ftrs_used = obj.mc_ftrs(imc,1:obj.mc_ftr_number(imc));
+                    %key = myfastint2str(sort(ftrs_used));
                     % !!!!!!!!!!!!!!!!!
-                    mc_labels_dict(key) = 2*mc_labels(:,imc) - 1;
+                    %mc_labels_dict(key) = 2*mc_labels(:,imc) - 1;
                     mc_labels_2(:,imc)  = 2*mc_labels(:,imc) - 1;
                 end
                 
@@ -361,7 +361,7 @@ classdef masterclassifier < handle
                 % loop over dois
                 for i = 1:obj.Ndoi
                     % get the SVs for a doi
-                    [SVs_tmp, p_all, p_0] = level_structure_SVs_for_doi(obj,i,behavior,mc_labels_dict,mc_labels_2);
+                    [SVs_tmp, p_all, p_0] = level_structure_SVs_for_doi(obj,i,behavior,mc_labels_2);
                     phi_all = phi_all + p_all;
                     phi_0 = phi_0 + p_0;
                     % update SVs
@@ -771,7 +771,7 @@ classdef masterclassifier < handle
             end
         end
         
-        function [SVs_dict, phi_all, phi_0] = level_structure_SVs_for_doi(obj,doi,behavior,mc_labels_dict,mc_labels)
+        function [SVs_dict, phi_all, phi_0] = level_structure_SVs_for_doi(obj,doi,behavior,mc_labels)
             
             % get parameters describing a doi from 
             % or from doi_mcs(Ndoi,L) and mc_ftrs(Nmcs,L)
@@ -798,9 +798,10 @@ classdef masterclassifier < handle
             verbose = 0;
             if (behavior == emptySetBehavior.NL)
                 %[SVs_dict,phi_all] = NL_SVS(level_structure,mc_labels_dict,coeffs,ftrs_used_in_kNN, N_ftrs_used_in_kNN, verbose);
-                [SVs_dict,phi_all,p0] = obj.NL_SVS_local(doi,level_structure,coeffs, mc_labels, verbose);
+                [SVs_dict,phi_all,~] = obj.NL_SVS_local(doi,level_structure,coeffs, mc_labels, verbose);
             elseif (behavior == emptySetBehavior.HNL)
-                [SVs_dict,phi_all,p0] = obj.HNL_SVS_local(doi,level_structure,coeffs, mc_labels, verbose);
+                %[SVs_dict,phi_all,p0] = obj.HNL_SVS_local_2(doi,level_structure,coeffs, mc_labels, verbose);
+                [SVs_dict,phi_all,~] = obj.HNL_SVS_local(doi,level_structure,coeffs, mc_labels, verbose);
             elseif (behavior == emptySetBehavior.NO)
                 %[SVs_dict,phi_all] = NO_SVS(level_structure,mc_labels_dict,coeffs,ftrs_used_in_kNN, N_ftrs_used_in_kNN, verbose);
                 [SVs_dict,phi_all] = obj.NO_SVS_local(doi,level_structure,coeffs, mc_labels, verbose);
@@ -808,14 +809,14 @@ classdef masterclassifier < handle
                 [SVs_dict,phi_all] = obj.HNO_SVS_local(doi,level_structure,coeffs, mc_labels, verbose);    
             elseif(behavior == emptySetBehavior.LS)
                 disp([ 'WARNING: this is slow!!!!!!!'])
-                [SVs_dict,phi_all] = LS_SVS(level_structure,mc_labels_dict,coeffs,ftrs_used_in_kNN, N_ftrs_used_in_kNN, verbose);               
+                error([' LS SV has been deprecated !!!!!'])
+                %[SVs_dict,phi_all] = LS_SVS(level_structure,mc_labels_dict,coeffs,ftrs_used_in_kNN, N_ftrs_used_in_kNN, verbose);               
             end
             
             % pass out phi_0
             tmp = exp(-coeffs(1));
             p0  = 2/(1+tmp) -1;
-            tmp     = mc_labels_dict.values;
-            NS      = length(tmp{1});
+            NS      = size(mc_labels,1);
             phi_0 = p0*ones(NS,1);
             
         end
@@ -858,12 +859,17 @@ classdef masterclassifier < handle
 %                                              N_ftrs_used_in_kNN as
 %                                              argument
 %   v1.4        HR                  3/28/2022 major fixes, use LS, etc
+%   v1.5        HR                  4/2/2022 fixed normalization on middlelayer SVs  
+
 
 
             % following NL SVs we calculate the SV of the middle layer components
 
             % how many components
             N_comp = length(level_structure.middlelayer);
+            NS      = size(mc_labels,1);
+            P   = @(x) 2/(1+exp(-x)) - 1 ;
+            v0  = P(coeffs(1));
 
             % form a list of all coalitions the middlelayer can form 
             elementlist = 1:1:N_comp;
@@ -883,7 +889,7 @@ classdef masterclassifier < handle
                 for i = 1:N_comp
                     ftrs_per_player{i} = cell2mat(level_structure.middlelayer{i}.features);
                 end
-                [middlelayer_SVs, phi_all, phi_0] = SH_LS(obj,doi,ftrs_per_player,mc_labels,coeffs,0);
+                [middlelayer_SVs, ~, ~] = SH_LS(obj,doi,ftrs_per_player,mc_labels,coeffs,0);
             elseif (N_comp == 1)
                 ftrs_in_coalition = cell2mat(level_structure.middlelayer{1}.features);
                 middlelayer_SVs = doi_prediction_from_subset(obj,doi,ftrs_in_coalition,mc_labels,coeffs) - doi_prediction_from_subset(obj,doi,[],mc_labels,coeffs);
@@ -929,7 +935,7 @@ classdef masterclassifier < handle
                     %----------- for SH_LS
                     if (length(S_bki) > 1 )
                         ftrs_per_player = S_bki;
-                        [ttt, phi_all, phi_0] = SH_LS(obj,doi,ftrs_per_player,mc_labels,coeffs,0);
+                        [ttt, ~, ~] = SH_LS(obj,doi,ftrs_per_player,mc_labels,coeffs,0);
                         bar_v_11(myfastint2str(key)) = ttt(:,ic);      % need the ic'th SV
                     elseif (length(S_bki) == 1)
                         ftrs_in_coalition = S_bki{1};
@@ -940,7 +946,7 @@ classdef masterclassifier < handle
                 end
                 % assign the grand coalition for the features
                 N_elements = length(component_ftr_sets{ic});
-                bar_v_11(myfastint2str(1:1:N_elements)) = comp_SV;
+                bar_v_11(myfastint2str(1:1:N_elements)) = comp_SV + v0*ones(NS,1);
                 tau_i = num2cell(1:1:N_elements);
                 %calculate the SH values for all features in the component
                 ftrs = component_ftr_sets{ic};
@@ -1039,7 +1045,7 @@ classdef masterclassifier < handle
             % are in the first NF second indices of mc_labels, and are
             % numbered from 1:NF
         %   Input:
-        %       doi:                used !!!!
+        %       doi:                used in ftrs_usedby_doi_and_mc
         %       subset:             the subset of ftrnames
         %       mc_labels:          array(#samples,#mcs) giving the values of a
         %                           kNN either -1 or +1; 
@@ -1290,6 +1296,7 @@ classdef masterclassifier < handle
         %                                   coalition value calculations
         %                                   --- use least squares for all
         %                                   internal SV calculations
+        %   v1.5        HR                  4/2/2022 fixed normalization on middlelayer SVs    
         %
 
             NL_SVs  = containers.Map;
@@ -1339,7 +1346,7 @@ classdef masterclassifier < handle
                     number2features(myfastint2str(i)) = ftrs_in_component{i};      
                 end        
                 c_vals = containers.Map;    %make the coalition values             
-                c_vals(myfastint2str(1:1:length(ftrs_in_component))) = middlelayer_SVs(:,ic);     % take the grand coalition from above
+                c_vals(myfastint2str(1:1:length(ftrs_in_component))) = middlelayer_SVs(:,ic) + v0*ones(NS,1);     % take the grand coalition from above
                 elementlist = 1:1:length(ftrs_in_component);   
                 for k = 1:length(ftrs_in_component) - 1     % not the grand coalition
                     tmp = nchoosek(elementlist,k);
@@ -1389,6 +1396,8 @@ classdef masterclassifier < handle
         %       phi_0:              the value of the empty set (NS,1)
         %
         %   v1.0        HR                  3/29/2022
+        %   v1.1        HR                  4/6/2022 fixes for underflow in
+        %                                   normalization by phi_all-phi_0 
         %
 
             NL_SVs  = containers.Map;
@@ -1457,7 +1466,13 @@ classdef masterclassifier < handle
                 tau_i = num2cell(1:1:length(ftrs_in_component));
                 [ttt_1, phi_all, phi_0] = SH_LS_from_dictionary_linear(obj,doi,tau_i,mc_labels,coeffs,c_vals,0);
                 
-                tmp = middlelayer_SVs(:,ic) ./ (phi_all(:) - phi_0(:));
+                % this could lead to an overflow if the ttt_1's are all
+                % zero ; check this 
+                check_vals = (phi_all(:) - phi_0(:));
+                underflow_indices = abs(check_vals) < 10^(-10); % need a small number within the accuracy of the linear solver in SH_LS
+                check_vals(underflow_indices) = 10^(20); % and conversly need a large number for the division below
+                tmp = middlelayer_SVs(:,ic) ./ check_vals;
+                %tmp = middlelayer_SVs(:,ic) ./ (phi_all(:) - phi_0(:));
                 for i = 1:length(tau_i)
                     NL_SVs(myfastint2str(number2features(myfastint2str(tau_i{i})))) = ttt_1(:,i) .* tmp(:);
                 end
@@ -1521,7 +1536,7 @@ classdef masterclassifier < handle
             values = linear;
         end
         
-        function [SVs, phi_all, phi_0] = SH_LS_from_dictionary_linear(obj,doi,ftrs_per_player,mc_labels,coeffs,coalition_values,debug)
+        function [SVs, phi_all, phi_0] = SH_LS_from_dictionary_linear(obj,ftrs_per_player,mc_labels,coeffs,coalition_values,debug)
             % LS formalism SVs for a set of players with ftrs_per_player as
             % players; the values of the coalitions are stored in a map
             % phi is 0 is from linear, NOTE make sure you call it with
@@ -1637,8 +1652,10 @@ classdef masterclassifier < handle
 %   Note: This is using SH.m which calculates the SVs of game using the
 %   direct formula. It might be faster to use the least squares formulation
 %   when calculating the SVs for the components of th e middlelayer
-
+%
 %   v1.0        HR                  3/30/2022
+%   v1.1        HR                  4/6/2022 fixes for underflow in
+%                                   normalization by phi_all-phi_0 
 
 
             % following NL SVs we calculate the SV of the middle layer components
@@ -1729,7 +1746,13 @@ classdef masterclassifier < handle
                 ftrs = component_ftr_sets{ic};
                 [ttt_1, pall,p0] = SH_LS_from_dictionary_linear(obj,doi,tau_i,mc_labels,coeffs,bar_v_11,0);
 
-                tmp = middlelayer_SVs(:,ic) ./ (pall(:) - p0(:));
+                % this could lead to an overflow if the ttt_1's are all
+                % zero ; check this 
+                check_vals = (pall(:) - p0(:));
+                underflow_indices = abs(check_vals) < 10^(-10); % need a small number within the accuracy of the linear solver in SH_LS
+                check_vals(underflow_indices) = 10^(20); % and conversly need a large number for the division below
+                tmp = middlelayer_SVs(:,ic) ./ check_vals;
+                %tmp = middlelayer_SVs(:,ic) ./ (pall(:) - p0(:));
                 for i = 1:length(tau_i)
                     key = myfastint2str(ftrs(i));
                     NO_SVs(key) = ttt_1(:,i) .* tmp(:);
@@ -1830,6 +1853,7 @@ classdef masterclassifier < handle
 
         end
         
+
     end
 end
 

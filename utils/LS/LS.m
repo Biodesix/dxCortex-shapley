@@ -4,6 +4,7 @@ classdef LS < handle
 %   It is contructed from  the description of a doi takes care of disjointedness in constructor
 %   uses k1nodes
 %   v1.0        HR                  3/14/2022
+%   v1.1        HR/MG               4/11/2022 clean-up
     properties
         toplayer        % the grand coalition: cell array of vector of all features
         middlelayer     % mini-classifier layer: cell array of k1nodes
@@ -91,50 +92,7 @@ classdef LS < handle
             % assign to middlelayer property of class
             obj.middlelayer = merge_list(1:cnt);
         end
-        
-        function R_i = LS_relevent_set(obj,ftr)
-            % makes the set of relevant coalitions for feature ftr for a level structure
-            % using remark 5.2 in M. Besner, Discrete applied mathematics, 309 (2022)85--109
-            
-            % get the name of the ftr
-            ftr_index = cell2mat(obj.bottomlayer) == ftr;            
-            feature_1 = obj.bottomlayer{ftr_index};
-            
-            % find the feature and its siblings and initialize R_1
-            R_1 = obj.middlelayer{obj.ancestors(ftr_index)}.features;
-            
-            % now on the middle level add all elements of the middlelayer that don't
-            % contain feature_1
-            
-            size_R_1 = length(R_1);
-            for i = 1:length(obj.middlelayer)
-                if (~( i == obj.ancestors(ftr_index)) )
-                    size_R_1 = size_R_1 +1;
-                    R_1{size_R_1} = cell2mat(obj.middlelayer{i}.features);                    
-                end
-            end
-
-            % now make all coalitions from the elements in R_1
-            % use nchoosek of the numbers 1,2,..., size_R_1, ==> the possible sizes go
-            % from 2 (we already have the singletons) to size_R_1
-            elementlist = 1:size_R_1;    % positions in R_1
-            R_2_size = size_R_1;
-            for i = 2:size_R_1
-                combinations = nchoosek(elementlist,i);
-                for j=1:size(combinations,1)     % loop over all possible combinations
-                    new_element = [];
-                    for j1 = 1:size(combinations,2)
-                        new_element = [ new_element  R_1{combinations(j,j1)}];   
-                    end
-                    R_2_size = R_2_size + 1;
-                    R_1{R_2_size} = new_element;
-                end
-            end
- 
-            R_i = R_1;
-            
-        end
-        
+              
         function RR = set_of_middlelayer_sets(obj)
             % this function returns a set of middlelayer features, i.e. a
             % cell array of length = number of middlelayer nodes
